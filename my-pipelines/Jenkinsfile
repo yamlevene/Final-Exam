@@ -1,0 +1,55 @@
+# Jenkins Pipeline for CI/CD Integration
+
+pipeline {
+    agent any
+    
+    environment {
+        DOCKERHUB_USERNAME = credentials('dockerhub-username')
+        DOCKERHUB_PASSWORD = credentials('dockerhub-password')
+        IMAGE_NAME = 'your-dockerhub-username/flask-aws-monitor'
+    }
+    
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-repo.git'
+            }
+        }
+        
+        stage('Parallel Checks') {
+           
+                stage('Linting') {
+                    steps {
+                        echo 'TODO: Add linting steps for Python, Shell, and Dockerfile'
+                    }
+                }
+                stage('Security Scan') {
+                    steps {
+                        echo 'TODO: Add security scanning steps for dependencies and container security'
+                    }
+                }
+            
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                echo 'TODO: Add Docker build step'
+            }
+        }
+        
+        stage('Push to Docker Hub') {
+            steps {
+                echo 'TODO: Implement Docker Hub push logic'
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed! Check logs for details.'
+        }
+    }
+}
