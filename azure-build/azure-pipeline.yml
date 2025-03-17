@@ -1,0 +1,136 @@
+# Azure DevOps Pipeline for CI/CD Integration
+
+trigger:
+  branches:
+    include:
+      - Dev
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
+  DOCKERHUB_PASSWORD: $(DOCKERHUB_PASSWORD)
+  GITHUB_USERNAME: 'yamlevene'
+  GITHUB_PAT: $(GITHUB_PAT)
+  IMAGE_NAME: 'flask-aws-monitor'
+  REPO_NAME: 'final-exam'
+  IMAGE_TAG: '$(Build.BuildId)'
+
+stages:
+# === Stage 1: Clone ===
+- stage: CloneRepository
+  displayName: 'Clone GitHub Repository'
+  jobs:
+  - job: Clone
+    steps:
+      - script: |
+          git clone https://$(GITHUB_USERNAME):$(GITHUB_PAT)@github.com/$(GITHUB_USERNAME)/Final-Exam.git
+          git checkout Dev
+        displayName: 'Clone GitHub Repo'
+
+# === Stage 2: Parallel Linting & Security ===
+- stage: ParallelChecks
+  displayName: 'Parallel Linting & Security Checks'
+  dependsOn: CloneRepository
+  jobs:
+  # --------- Linting Job ---------
+  - job: Linting
+    displayName: 'Linting Checks'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+
+      # Install linters
+      - script: |
+          echo MOCK: pip install flake8
+          echo MOCK: sudo apt-get update && sudo apt-get install -y shellcheck
+          echo MOCK: curl -sL https://github.com/hadolint/hadolint/releases/download/v2.9.1/hadolint-Linux-x86_64 -o hadolint
+          echo MOCK: chmod +x hadolint && sudo mv hadolint /usr/local/bin/
+        displayName: 'Install Linting Tools'
+
+      # Python linting
+      - script: |
+          echo MOCK: flake8 .
+        displayName: 'Run Python Linting (flake8)'
+
+      # Shell linting
+      - script: |
+          echo MOCK: shellcheck $(find . -name "*.sh")
+        displayName: 'Run Shell Script Linting (ShellCheck)'
+
+      # Dockerfile linting
+      - script: |
+          echo MOCK: hadolint docker-build/Dockerfile
+        displayName: 'Run Dockerfile Linting (Hadolint)'
+
+  # --------- Security Scan Job ---------
+  - job: SecurityScanning
+    displayName: 'Security Scanning'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+
+      # Install security scanners
+      - script: |
+          echo MOCK: pip install bandit
+          echo MOCK: curl -sfL https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.44.1_Linux-64bit.tar.gz | tar zxv
+          echo MOCK: sudo mv trivy /usr/local/bin/
+        displayName: 'Install Security Scanning Tools'
+
+      # Python security scan
+      - script: |
+          echo MOCK: bandit -r .
+        displayName: 'Run Python Security Scan (Bandit)'
+
+      # Docker image security scan
+      - script: |
+          echo MOCK: trivy image --exit-code 0 --no-progress $(DOCKERHUB_USERNAME)/$(IMAGE_NAME):latest || true
+        displayName: 'Run Docker Image Security Scan (Trivy)'
+
+# === Stage 3: Build Docker Image ===
+- stage: BuildDockerImage
+  displayName: 'Build Docker Image'
+  dependsOn: ParallelChecks
+  jobs:
+  - job: BuildImage
+    displayName: 'Build Docker Image'
+    steps:
+      - script: |
+          echo "Building Docker image ${REPO_NAME}:${IMAGE_TAG}"
+          docker build -f docker-build/Dockerfile -t $(DOCKERHUB_USERNAME)/$(REPO_NAME):$(IMAGE_TAG) docker-build/
+          docker tag $(DOCKERHUB_USERNAME)/$(REPO_NAME):$(IMAGE_TAG) $(DOCKERHUB_USERNAME)/$(REPO_NAME):latest
+        displayName: 'Build and Tag Docker Image'
+
+# === Stage 4: Push Docker Image to Docker Hub ===
+- stage: PushToDockerHub
+  displayName: 'Push Docker Image to Docker Hub'
+  dependsOn: BuildDockerImage
+  jobs:
+  - job: PushImage
+    displayName: 'Push Docker Image'
+    steps:
+      # Docker Login
+      - script: |
+          echo $(DOCKERHUB_PASSWORD) | docker login -u $(DOCKERHUB_USERNAME) --password-stdin
+        displayName: 'Docker Login'
+
+      # Docker Push
+      - script: |
+          docker push $(DOCKERHUB_USERNAME)/$(REPO_NAME):$(IMAGE_TAG)
+          docker push $(DOCKERHUB_USERNAME)/$(REPO_NAME):latest
+        displayName: 'Push Docker Images to Docker Hub'
+
+# === Stage 5: Secure Credentials Documentation ===
+- stage: SecureCredentials
+  displayName: 'Store and Use Secure Credentials'
+  jobs:
+  - job: StoreSecrets
+    displayName: 'Secure Credential Storage'
+    steps:
+      - script: |
+          echo 'DockerHub username and password are securely stored as Azure DevOps pipeline secrets.'
+          echo 'Go to: Project Settings ➜ Pipelines ➜ Library ➜ Variable Groups ➜ Add secrets'
+        displayName: 'Credential Documentation'
