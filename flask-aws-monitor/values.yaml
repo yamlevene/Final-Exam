@@ -1,0 +1,26 @@
+replicaCount: 1
+
+image:
+  repository: olego700/flask-aws-monitor
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: LoadBalancer
+  port: 5001
+
+aws:
+  accessKeyId: MOCK_AWS_ACCESS_KEY
+  secretAccessKey: MOCK_AWS_SECRET_KEY
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+ingress:
+  enabled: false
+  host: flask-monitor.MOCKdomain.com
