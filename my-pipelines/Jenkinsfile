@@ -1,49 +1,80 @@
-# Jenkins Pipeline for CI/CD Integration
-
 pipeline {
     agent any
-    
+
     environment {
-        DOCKERHUB_USERNAME = credentials('dockerhub-username')
-        DOCKERHUB_PASSWORD = credentials('dockerhub-password')
-        IMAGE_NAME = 'your-dockerhub-username/flask-aws-monitor'
+        DOCKERHUB_USERNAME = credentials('yamlevene')  // Credentials for Docker Hub
+        DOCKERHUB_PASSWORD = credentials('Password123')  // Credentials for Docker Hub
+        IMAGE_NAME = 'yamlevene/flask-aws-monitor' // Docker image name (use your Docker Hub username)
     }
-    
+
     stages {
         stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-repo.git'
+                // Cloning the repository from GitHub
+                git branch: 'Dev', url: 'https://github.com/Final-Exam.git'
             }
         }
-        
+
         stage('Parallel Checks') {
-           
+            parallel {
                 stage('Linting') {
                     steps {
-                        echo 'TODO: Add linting steps for Python, Shell, and Dockerfile'
+                        script {
+                            // Running Python linting with Flake8
+                            sh 'pip install flake8'
+                            sh 'flake8 .'
+
+                            // Running Shell linting with ShellCheck
+                            sh 'apt-get install -y shellcheck'
+                            sh 'shellcheck $(find . -name "*.sh")'
+
+                            // Running Dockerfile linting with Hadolint
+                            sh 'curl -sL https://github.com/hadolint/hadolint/releases/download/v2.9.1/hadolint-Linux-x86_64 -o /usr/local/bin/hadolint'
+                            sh 'chmod +x /usr/local/bin/hadolint'
+                            sh 'hadolint Dockerfile'
+                        }
                     }
                 }
+                
                 stage('Security Scan') {
                     steps {
-                        echo 'TODO: Add security scanning steps for dependencies and container security'
+                        script {
+                            // Running Python security check with Bandit
+                            sh 'pip install bandit'
+                            sh 'bandit -r .'
+
+                            // Running Docker security scan with Trivy
+                            sh 'curl -sfL https://github.com/aquasecurity/trivy/releases/download/v0.19.2/trivy_0.19.2_Linux-x86_64.deb -o trivy.deb'
+                            sh 'dpkg -i trivy.deb'
+                            sh 'trivy image --exit-code 0 --no-progress your-dockerhub-username/flask-aws-monitor'
+                        }
                     }
                 }
-            
-        }
-        
-        stage('Build Docker Image') {
-            steps {
-                echo 'TODO: Add Docker build step'
             }
         }
-        
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Build Docker image
+                    sh 'docker build -f docker-build/Dockerfile -t ${IMAGE_NAME} .'
+                }
+            }
+        }
+
         stage('Push to Docker Hub') {
             steps {
-                echo 'TODO: Implement Docker Hub push logic'
+                script {
+                    // Log in to Docker Hub
+                    sh "echo ${DOCKERHUB_PASSWORD} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin"
+                    
+                    // Push the built Docker image to Docker Hub
+                    sh "docker push ${IMAGE_NAME}"
+                }
             }
         }
     }
-    
+
     post {
         success {
             echo 'Pipeline completed successfully!'
